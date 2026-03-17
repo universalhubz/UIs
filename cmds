@@ -1,63 +1,69 @@
--- UNIVERSAL AUTO-BUILDER: GAME EXPLORER TO CHAT
 local TextChatService = game:GetService("TextChatService")
-local RunService = game:GetService("RunService")
 
 -- Configuration
-local CHUNK_SIZE = 200 -- Roblox chat character limit per message
-local SHOW_PARTS = false -- Set to true if you want to see every single Part/Mesh
-
--- Define standard services to crawl
-local services = {
-	"Workspace", "Players", "Lighting", "ReplicatedFirst", 
-	"ReplicatedStorage", "StarterGui", "StarterPack", 
-	"StarterPlayer", "Teams", "SoundService", "TextChatService"
+local CHUNK_SIZE = 200 
+local SERVICES = {
+    "Workspace", "Players", "ReplicatedFirst", "ReplicatedStorage", 
+    "StarterGui", "StarterPack", "StarterPlayer", "Teams", "SoundService"
 }
 
--- The Recursive Engine
-local function scanHierarchy(obj, depth)
-	-- Security/Access Check
-	local success, children = pcall(function() return obj:GetChildren() end)
-	if not success or not children then return "" end
-
-	-- Filter out Parts if SHOW_PARTS is false to prevent chat flooding
-	if not SHOW_PARTS and obj:IsA("BasePart") then return "" end
-
-	local indent = string.rep("  ", depth)
-	local symbol = obj:IsA("Folder") and "📂 " or (obj:IsA("LuaSourceContainer") and "📜 " or "🔹 ")
-	local line = indent .. symbol .. obj.Name .. " [" .. obj.ClassName .. "]\n"
-
-	for _, child in ipairs(children) do
-		line = line .. scanHierarchy(child, depth + 1)
-	end
-
-	return line
+-- Check if an object or any of its descendants is a script
+local function hasScriptDescendant(obj)
+    if obj:IsA("LuaSourceContainer") then return true end
+    for _, child in ipairs(obj:GetChildren()) do
+        if hasScriptDescendant(child) then return true end
+    end
+    return false
 end
 
-local function executeExport()
-	-- Wait for the chat to be ready
-	local bChannel = TextChatService:WaitForChild("TextChannels", 10):WaitForChild("RBXGeneral", 10)
-	if not bChannel then return end
+-- The Recursive Engine (Script-Focused)
+local function scanScripts(obj, depth)
+    -- If this branch has zero scripts, don't even look at it
+    if not hasScriptDescendant(obj) then return "" end
 
-	bChannel:DisplaySystemMessage("⚠️ [UNIVERSAL EXPLORER] Beginning Auto-Build...")
+    local indent = string.rep("  ", depth)
+    local output = ""
+    
+    -- Determine the Icon
+    local icon = "🔹 "
+    if obj:IsA("Script") then icon = "📜 " 
+    elseif obj:IsA("LocalScript") then icon = "💻 " 
+    elseif obj:IsA("ModuleScript") then icon = "📦 " 
+    elseif obj:IsA("Folder") or obj:IsA("Model") then icon = "📂 " end
 
-	for _, serviceName in ipairs(services) do
-		local serv = game:GetService(serviceName)
-		if serv then
-			local data = scanHierarchy(serv, 0)
-
-			-- Chunking the string to prevent truncation
-			for i = 1, #data, CHUNK_SIZE do
-				local chunk = string.sub(data, i, i + CHUNK_SIZE - 1)
-				bChannel:DisplaySystemMessage(chunk)
-
-				-- Slight delay to prevent the "Too many messages" kick/throttle
-				if i % (CHUNK_SIZE * 5) == 0 then task.wait(0.1) end
-			end
-		end
-	end
-
-	bChannel:DisplaySystemMessage("✅ [UNIVERSAL EXPLORER] Export Complete.")
+    output = indent .. icon .. obj.Name .. " [" .. obj.ClassName .. "]\n"
+    
+    for _, child in ipairs(obj:GetChildren()) do
+        output = output .. scanScripts(child, depth + 1)
+    end
+    
+    return output
 end
 
--- "Autobuild" Trigger: Runs immediately when the script enters the game
-task.spawn(executeExport)
+local function executeScriptExport()
+    local bChannel = TextChatService:WaitForChild("TextChannels", 10):WaitForChild("RBXGeneral", 10)
+    if not bChannel then return end
+
+    bChannel:DisplaySystemMessage("🔍 [SCRIPT EXPLORER] Scanning for Lua Source...")
+
+    for _, serviceName in ipairs(SERVICES) do
+        local serv = game:GetService(serviceName)
+        if serv then
+            local data = scanScripts(serv, 0)
+            
+            if #data > 0 then
+                -- Chunking to bypass chat limits
+                for i = 1, #data, CHUNK_SIZE do
+                    local chunk = string.sub(data, i, i + CHUNK_SIZE - 1)
+                    bChannel:DisplaySystemMessage(chunk)
+                    if i % 1000 == 0 then task.wait(0.1) end
+                end
+            end
+        end
+    end
+    
+    bChannel:DisplaySystemMessage("✅ [SCRIPT EXPLORER] Scan Complete.")
+end
+
+-- Autobuild
+task.spawn(executeScriptExport)

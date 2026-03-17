@@ -3,67 +3,88 @@ local TextChatService = game:GetService("TextChatService")
 -- Configuration
 local CHUNK_SIZE = 200 
 local SERVICES = {
-    "Workspace", "Players", "ReplicatedFirst", "ReplicatedStorage", 
-    "StarterGui", "StarterPack", "StarterPlayer", "Teams", "SoundService"
+    "Workspace", 
+    "Players", 
+    "Lighting",
+    "ReplicatedFirst", 
+    "ReplicatedStorage", 
+    "StarterGui", 
+    "StarterPack", 
+    "StarterPlayer", 
+    "Teams", 
+    "SoundService"
 }
 
--- Check if an object or any of its descendants is a script
+-- Check if an object contains any scripts at any depth
 local function hasScriptDescendant(obj)
     if obj:IsA("LuaSourceContainer") then return true end
-    for _, child in ipairs(obj:GetChildren()) do
+    local children = obj:GetChildren()
+    for _, child in ipairs(children) do
         if hasScriptDescendant(child) then return true end
     end
     return false
 end
 
--- The Recursive Engine (Script-Focused)
-local function scanScripts(obj, depth)
-    -- If this branch has zero scripts, don't even look at it
-    if not hasScriptDescendant(obj) then return "" end
+-- The Recursive Engine
+local function scan(obj, depth)
+    -- If it's a folder/model, only show it if it contains a script somewhere inside
+    if (obj:IsA("Folder") or obj:IsA("Model") or obj:IsA("Configuration")) and not hasScriptDescendant(obj) then 
+        return "" 
+    end
+    
+    -- Ignore physical parts to keep the layout focused on logic
+    if obj:IsA("BasePart") and not obj:IsA("LuaSourceContainer") then
+        return ""
+    end
 
     local indent = string.rep("  ", depth)
-    local output = ""
-    
-    -- Determine the Icon
     local icon = "🔹 "
+    
+    -- Icon logic for scripts and containers
     if obj:IsA("Script") then icon = "📜 " 
     elseif obj:IsA("LocalScript") then icon = "💻 " 
     elseif obj:IsA("ModuleScript") then icon = "📦 " 
-    elseif obj:IsA("Folder") or obj:IsA("Model") then icon = "📂 " end
+    elseif obj:IsA("Folder") or obj:IsA("Model") then icon = "📂 "
+    elseif obj:IsA("ServiceProvider") then icon = "⚙️ " -- Icon for Services
+    end
 
-    output = indent .. icon .. obj.Name .. " [" .. obj.ClassName .. "]\n"
+    local output = indent .. icon .. obj.Name .. " [" .. obj.ClassName .. "]\n"
     
     for _, child in ipairs(obj:GetChildren()) do
-        output = output .. scanScripts(child, depth + 1)
+        output = output .. scan(child, depth + 1)
     end
     
     return output
 end
 
-local function executeScriptExport()
+local function executeFullScan()
     local bChannel = TextChatService:WaitForChild("TextChannels", 10):WaitForChild("RBXGeneral", 10)
     if not bChannel then return end
 
-    bChannel:DisplaySystemMessage("🔍 [SCRIPT EXPLORER] Scanning for Lua Source...")
+    bChannel:DisplaySystemMessage("🛠️ [UNIVERSAL BUILD] Starting Service & Script Scan...")
 
     for _, serviceName in ipairs(SERVICES) do
-        local serv = game:GetService(serviceName)
-        if serv then
-            local data = scanScripts(serv, 0)
+        -- Use pcall in case a service isn't accessible in the current environment
+        local success, serv = pcall(function() return game:GetService(serviceName) end)
+        
+        if success and serv then
+            -- We scan every service. It will only return text if scripts exist inside.
+            local data = scan(serv, 0)
             
             if #data > 0 then
-                -- Chunking to bypass chat limits
+                -- Send the data to chat in readable chunks
                 for i = 1, #data, CHUNK_SIZE do
                     local chunk = string.sub(data, i, i + CHUNK_SIZE - 1)
                     bChannel:DisplaySystemMessage(chunk)
+                    -- Small wait to prevent "Message Flood" kicks
                     if i % 1000 == 0 then task.wait(0.1) end
                 end
             end
         end
     end
     
-    bChannel:DisplaySystemMessage("✅ [SCRIPT EXPLORER] Scan Complete.")
+    bChannel:DisplaySystemMessage("✅ [SCAN COMPLETE]")
 end
 
--- Autobuild
-task.spawn(executeScriptExport)
+-- Autobuild: Runs immediately on execution
+task.spawn(executeFullScan)

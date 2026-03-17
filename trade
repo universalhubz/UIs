@@ -4,98 +4,91 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- 1. Persistent UI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DeepMachineWatcher"
+screenGui.Name = "ScriptActivityViewer"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0.4, 0, 0.45, 0)
-frame.Position = UDim2.new(0.3, 0, 0.2, 0)
-frame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-frame.Parent = screenGui
-Instance.new("UICorner", frame)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0.4, 0, 0.5, 0)
+mainFrame.Position = UDim2.new(0.3, 0, 0.25, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame)
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 35)
-title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-title.Text = "Deep Searching Workspace..."
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+title.Text = "computerscreen: Live Activity"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.SourceSansBold
-title.Parent = frame
+title.Parent = mainFrame
 
 local scroll = Instance.new("ScrollingFrame")
 scroll.Size = UDim2.new(1, -10, 1, -45)
 scroll.Position = UDim2.new(0, 5, 0, 40)
 scroll.BackgroundTransparency = 1
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scroll.ScrollBarThickness = 4
-scroll.Parent = frame
+scroll.Parent = mainFrame
 
-local contentLabel = Instance.new("TextLabel")
-contentLabel.Size = UDim2.new(1, 0, 0, 0)
-contentLabel.AutomaticSize = Enum.AutomaticSize.Y
-contentLabel.BackgroundTransparency = 1
-contentLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
-contentLabel.TextSize = 13
-contentLabel.Font = Enum.Font.Code
-contentLabel.TextXAlignment = Enum.TextXAlignment.Left
-contentLabel.TextYAlignment = Enum.TextYAlignment.Top
-contentLabel.RichText = true
-contentLabel.Text = "Initializing Crawler..."
-contentLabel.Parent = scroll
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, 0, 0, 0)
+infoLabel.AutomaticSize = Enum.AutomaticSize.Y
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.fromRGB(0, 255, 180)
+infoLabel.TextSize = 14
+infoLabel.Font = Enum.Font.Code
+infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+infoLabel.TextYAlignment = Enum.TextYAlignment.Top
+infoLabel.RichText = true
+infoLabel.Text = "Searching for TradeMachine > computerscreen..."
+infoLabel.Parent = scroll
 
--- 2. Deep Search Logic (No FindFirstChild)
-local function deepSearch(targetName)
-    local stack = {workspace}
-    local iterations = 0
-    
-    while #stack > 0 do
-        local current = table.remove(stack)
-        iterations = iterations + 1
-        
-        -- Optimization: Yield every 1000 checks so the game doesn't lag
-        if iterations % 1000 == 0 then task.wait() end
-        
-        if current.Name == targetName then
-            return current -- Found it!
-        end
-        
-        -- Add children to the stack to keep searching deeper
-        local children = current:GetChildren()
-        for _, child in ipairs(children) do
-            table.insert(stack, child)
-        end
+-- 2. Logic to Find and Monitor
+local function monitorScript()
+    -- Find TradeMachine Model
+    local machine = workspace:FindFirstChild("TradeMachine", true)
+    if not machine or not machine:IsA("Model") then
+        infoLabel.Text = "<font color='#ff4444'>[!] TradeMachine Model not found.</font>"
+        return
     end
-    return nil
-end
 
-local function updateDisplay()
-    local target = deepSearch("TradeMachine")
+    -- Find computerscreen Script
+    local scr = machine:FindFirstChild("computerscreen", true)
+    if not scr then
+        infoLabel.Text = "<font color='#ff4444'>[!] computerscreen script missing from " .. machine.Name .. "</font>"
+        return
+    end
+
+    -- Since we can't read .Source, we read everything ELSE
+    local report = {}
+    table.insert(report, "<b>[STATUS] Script is Active</b>")
+    table.insert(report, "Enabled: " .. tostring(scr.Enabled))
+    table.insert(report, "RunContext: " .. tostring(scr.RunContext))
+    table.insert(report, "\n<b>[CHILDREN/VARIABLES]</b>")
     
-    if target then
-        title.Text = "Target Locked: TradeMachine"
-        local log = { "<b>Path:</b> " .. target:GetFullName(), "" }
-        
-        for _, child in ipairs(target:GetChildren()) do
-            local val = ""
-            if child:IsA("ValueObject") then
-                val = " = <font color='#ffffff'>" .. tostring(child.Value) .. "</font>"
-            end
-            
-            local icon = child:IsA("RemoteEvent") and "📡 " or (child:IsA("ModuleScript") and "📦 " or "🔹 ")
-            table.insert(log, icon .. child.Name .. " <font color='#666'>[" .. child.ClassName .. "]</font>" .. val)
-        end
-        contentLabel.Text = table.concat(log, "\n")
+    local children = scr:GetChildren()
+    if #children == 0 then
+        table.insert(report, "<i>No variables or remotes inside script.</i>")
     else
-        title.Text = "Searching..."
-        contentLabel.Text = "<font color='#ff4444'>TradeMachine not found yet. Crawling workspace...</font>"
+        for _, child in ipairs(children) do
+            local extra = ""
+            if child:IsA("ValueObject") then
+                extra = " = <font color='#ffffff'>" .. tostring(child.Value) .. "</font>"
+            end
+            table.insert(report, "🔹 " .. child.Name .. " [" .. child.ClassName .. "]" .. extra)
+        end
     end
+    
+    table.insert(report, "\n<b>[CODE STATUS]</b>")
+    table.insert(report, "<font color='#aaaaaa'>The source code is encrypted on the server. To see what the script is DOING, look for RemoteEvents inside it.</font>")
+    
+    infoLabel.Text = table.concat(report, "\n")
 end
 
--- 3. Run Loop
+-- 3. Live Update Loop
 task.spawn(function()
     while true do
-        updateDisplay()
-        task.wait(2) -- Search every 2 seconds
+        monitorScript()
+        task.wait(1)
     end
 end)

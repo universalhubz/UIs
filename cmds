@@ -1,90 +1,87 @@
-local TextChatService = game:GetService("TextChatService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- Configuration
-local CHUNK_SIZE = 200 
+-- 1. Create the UI Hierarchy
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ExplorerExportUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Size = UDim2.new(0.4, 0, 0.6, 0)
+scrollingFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+scrollingFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+scrollingFrame.BorderSizePixel = 2
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will auto-adjust
+scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollingFrame.Parent = screenGui
+
+local textLabel = Instance.new("TextLabel")
+textLabel.Size = UDim2.new(1, -20, 0, 0)
+textLabel.AutomaticSize = Enum.AutomaticSize.Y
+textLabel.BackgroundTransparency = 1
+textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+textLabel.TextXAlignment = Enum.TextXAlignment.Left
+textLabel.TextYAlignment = Enum.TextYAlignment.Top
+textLabel.Font = Enum.Font.Code
+textLabel.TextSize = 14
+textLabel.RichText = true
+textLabel.Text = "Scanning Game... Please wait.\n"
+textLabel.Parent = scrollingFrame
+
+-- 2. Configuration
 local SERVICES = {
-    "Workspace", 
-    "Players", 
-    "Lighting",
-    "ReplicatedFirst", 
-    "ReplicatedStorage", 
-    "StarterGui", 
-    "StarterPack", 
-    "StarterPlayer", 
-    "Teams", 
-    "SoundService"
+    "Workspace", "Players", "Lighting", "ReplicatedFirst", 
+    "ReplicatedStorage", "StarterGui", "StarterPack", 
+    "StarterPlayer", "Teams", "SoundService"
 }
 
--- Check if an object contains any scripts at any depth
+-- 3. Logic Functions
 local function hasScriptDescendant(obj)
     if obj:IsA("LuaSourceContainer") then return true end
-    local children = obj:GetChildren()
-    for _, child in ipairs(children) do
+    for _, child in ipairs(obj:GetChildren()) do
         if hasScriptDescendant(child) then return true end
     end
     return false
 end
 
--- The Recursive Engine
 local function scan(obj, depth)
-    -- If it's a folder/model, only show it if it contains a script somewhere inside
-    if (obj:IsA("Folder") or obj:IsA("Model") or obj:IsA("Configuration")) and not hasScriptDescendant(obj) then 
-        return "" 
-    end
-    
-    -- Ignore physical parts to keep the layout focused on logic
-    if obj:IsA("BasePart") and not obj:IsA("LuaSourceContainer") then
-        return ""
-    end
+    if (obj:IsA("Folder") or obj:IsA("Model")) and not hasScriptDescendant(obj) then return "" end
+    if obj:IsA("BasePart") and not obj:IsA("LuaSourceContainer") then return "" end
 
-    local indent = string.rep("  ", depth)
-    local icon = "🔹 "
+    local indent = string.rep("    ", depth)
+    local icon = "• "
     
-    -- Icon logic for scripts and containers
     if obj:IsA("Script") then icon = "📜 " 
     elseif obj:IsA("LocalScript") then icon = "💻 " 
     elseif obj:IsA("ModuleScript") then icon = "📦 " 
     elseif obj:IsA("Folder") or obj:IsA("Model") then icon = "📂 "
-    elseif obj:IsA("ServiceProvider") then icon = "⚙️ " -- Icon for Services
+    elseif obj:IsA("ServiceProvider") then icon = "⚙️ " 
     end
 
-    local output = indent .. icon .. obj.Name .. " [" .. obj.ClassName .. "]\n"
+    local line = indent .. icon .. obj.Name .. " <font color='#aaaaaa'>[" .. obj.ClassName .. "]</font>\n"
     
     for _, child in ipairs(obj:GetChildren()) do
-        output = output .. scan(child, depth + 1)
+        line = line .. scan(child, depth + 1)
     end
     
-    return output
+    return line
 end
 
-local function executeFullScan()
-    local bChannel = TextChatService:WaitForChild("TextChannels", 10):WaitForChild("RBXGeneral", 10)
-    if not bChannel then return end
-
-    bChannel:DisplaySystemMessage("🛠️ [UNIVERSAL BUILD] Starting Service & Script Scan...")
-
+-- 4. Execute
+task.spawn(function()
+    local finalOutput = "<b>[GAME EXPLORER SCRIPT LAYOUT]</b>\n\n"
+    
     for _, serviceName in ipairs(SERVICES) do
-        -- Use pcall in case a service isn't accessible in the current environment
         local success, serv = pcall(function() return game:GetService(serviceName) end)
-        
         if success and serv then
-            -- We scan every service. It will only return text if scripts exist inside.
-            local data = scan(serv, 0)
-            
-            if #data > 0 then
-                -- Send the data to chat in readable chunks
-                for i = 1, #data, CHUNK_SIZE do
-                    local chunk = string.sub(data, i, i + CHUNK_SIZE - 1)
-                    bChannel:DisplaySystemMessage(chunk)
-                    -- Small wait to prevent "Message Flood" kicks
-                    if i % 1000 == 0 then task.wait(0.1) end
-                end
+            local serviceData = scan(serv, 0)
+            if #serviceData > 0 then
+                finalOutput = finalOutput .. serviceData .. "\n"
             end
         end
     end
     
-    bChannel:DisplaySystemMessage("✅ [SCAN COMPLETE]")
-end
-
--- Autobuild: Runs immediately on execution
-task.spawn(executeFullScan)
+    textLabel.Text = finalOutput
+end)

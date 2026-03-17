@@ -4,7 +4,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- 1. Persistent UI Setup
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "TurboExplorerPro"
+screenGui.Name = "TurboExplorer_Smart"
 screenGui.ResetOnSpawn = false 
 screenGui.Parent = playerGui
 
@@ -26,7 +26,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(0.5, 0, 0, 30)
 title.Position = UDim2.new(0, 12, 0, 5)
 title.BackgroundTransparency = 1
-title.Text = "Pro Game Explorer"
+title.Text = "Smart Explorer"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Font = Enum.Font.SourceSansBold
@@ -34,23 +34,30 @@ title.TextSize = 20
 title.Parent = header
 
 local searchBar = Instance.new("TextBox")
-searchBar.Size = UDim2.new(0.95, 0, 0, 35)
+searchBar.Size = UDim2.new(0.7, 0, 0, 35)
 searchBar.Position = UDim2.new(0.025, 0, 0, 50)
-searchBar.PlaceholderText = "Search Scripts, Models, or Folders..."
+searchBar.PlaceholderText = "Search Scripts/Models..."
 searchBar.Text = ""
 searchBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 searchBar.TextColor3 = Color3.fromRGB(255, 255, 255)
-searchBar.ClearTextOnFocus = false
 searchBar.Parent = header
 Instance.new("UICorner", searchBar)
+
+local viewAllBtn = Instance.new("TextButton")
+viewAllBtn.Size = UDim2.new(0.22, 0, 0, 35)
+viewAllBtn.Position = UDim2.new(0.75, 0, 0, 50)
+viewAllBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+viewAllBtn.Text = "View All"
+viewAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+viewAllBtn.Parent = header
+Instance.new("UICorner", viewAllBtn)
 
 local stopBtn = Instance.new("TextButton")
 stopBtn.Size = UDim2.new(0, 90, 0, 30)
 stopBtn.Position = UDim2.new(1, -100, 0, 8)
 stopBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-stopBtn.Text = "STOP SCAN"
+stopBtn.Text = "STOP"
 stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-stopBtn.Font = Enum.Font.SourceSansBold
 stopBtn.Parent = header
 Instance.new("UICorner", stopBtn)
 
@@ -66,7 +73,7 @@ local listLayout = Instance.new("UIListLayout", scroll)
 
 -- 2. Performance Logic
 local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"}
-local currentScanID = 0 -- Used to cancel old scans immediately
+local currentScanID = 0
 
 local function createLine(text, color)
     local label = Instance.new("TextLabel")
@@ -85,7 +92,7 @@ local function runScan(filterText)
     currentScanID = currentScanID + 1
     local myScanID = currentScanID
     
-    -- Clear UI
+    -- Clear UI safely
     for _, item in ipairs(scroll:GetChildren()) do
         if item:IsA("TextLabel") then item:Destroy() end
     end
@@ -94,23 +101,21 @@ local function runScan(filterText)
     local searchTerm = filterText:lower()
 
     for _, sName in ipairs(SERVICES) do
-        -- Check if a new scan started or stop was pressed
         if myScanID ~= currentScanID then return end
-        
         local success, service = pcall(game.GetService, game, sName)
+        
         if success and service then
             createLine("<b>[" .. sName .. "]</b>", Color3.fromRGB(255, 215, 0))
             
             local stack = {{service, 1}}
             while #stack > 0 do
-                -- KILL SWITCH: Stop if ID changed
                 if myScanID ~= currentScanID then return end
                 
                 local node = table.remove(stack)
                 local obj, depth = node[1], node[2]
 
-                -- FILTER: Only show Scripts, Models, and Folders (Containers)
                 if obj ~= service and (obj:IsA("LuaSourceContainer") or obj:IsA("Model") or obj:IsA("Folder")) then
+                    -- SEARCH LOGIC
                     if searchTerm == "" or obj.Name:lower():find(searchTerm) then
                         local indent = string.rep("  ", depth)
                         local icon = obj:IsA("LuaSourceContainer") and "📜" or (obj:IsA("Model") and "🧱" or "📂")
@@ -121,9 +126,8 @@ local function runScan(filterText)
                     end
                 end
 
-                -- Yield to prevent crashing/freezing
-                if foundCount % 300 == 0 then 
-                    title.Text = "Searching... (" .. foundCount .. ")"
+                if foundCount % 350 == 0 then 
+                    title.Text = "Rendering: " .. foundCount
                     task.wait() 
                 end
 
@@ -134,19 +138,24 @@ local function runScan(filterText)
             end
         end
     end
-    title.Text = "Scan Complete: " .. foundCount .. " results"
+    title.Text = "Found: " .. foundCount
 end
 
 -- 3. Interactivity
 stopBtn.MouseButton1Click:Connect(function()
-    currentScanID = currentScanID + 1 -- Incrementing ID effectively kills the current loop
-    title.Text = "Scan Stopped"
+    currentScanID = currentScanID + 1
+    title.Text = "Scan Halted"
+end)
+
+viewAllBtn.MouseButton1Click:Connect(function()
+    searchBar.Text = ""
+    runScan("")
 end)
 
 searchBar:GetPropertyChangedSignal("Text"):Connect(function()
     local text = searchBar.Text
-    task.delay(0.5, function()
-        if searchBar.Text == text then -- Debounce check
+    task.delay(0.6, function()
+        if searchBar.Text == text and text ~= "" then
             runScan(text)
         end
     end)

@@ -2,112 +2,94 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. Create Persistent UI
+-- 1. Persistent UI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "TurboExplorerUI"
-screenGui.ResetOnSpawn = false -- Keeps it active after death
+screenGui.Name = "UnlimitedExplorer"
+screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
--- Toggle Button (Small button to re-open the UI if closed)
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 80, 0, 30)
-toggleBtn.Position = UDim2.new(0, 10, 0.5, -15) -- Left side center
-toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+toggleBtn.Position = UDim2.new(0, 5, 0.4, 0)
 toggleBtn.Text = "EXPLORER"
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Font = Enum.Font.SourceSansBold
 toggleBtn.Parent = screenGui
 Instance.new("UICorner", toggleBtn)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0.9, 0, 0.8, 0)
 mainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-mainFrame.Visible = true
+mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame)
 
--- Header
 local header = Instance.new("Frame")
-header.Size = UDim2.new(1, 0, 0, 40)
-header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+header.Size = UDim2.new(1, 0, 0, 35)
+header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 header.Parent = mainFrame
-Instance.new("UICorner", header)
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(0.5, 0, 1, 0)
-title.Position = UDim2.new(0, 15, 0, 0)
+title.Size = UDim2.new(1, 0, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Turbo Explorer"
+title.Text = "Loading Heavy Game Data..."
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Font = Enum.Font.SourceSansBold
 title.Parent = header
 
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 35, 0, 35)
-closeBtn.Position = UDim2.new(1, -40, 0, 2.5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Parent = header
-Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
-
--- Content Area
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -10, 1, -50)
-scroll.Position = UDim2.new(0, 5, 0, 45)
+scroll.Size = UDim2.new(1, -10, 1, -40)
+scroll.Position = UDim2.new(0, 5, 0, 40)
 scroll.BackgroundTransparency = 1
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 scroll.ScrollBarThickness = 4
 scroll.Parent = mainFrame
 
-local textLabel = Instance.new("TextLabel")
-textLabel.Size = UDim2.new(1, 0, 0, 0)
-textLabel.AutomaticSize = Enum.AutomaticSize.Y
-textLabel.BackgroundTransparency = 1
-textLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-textLabel.TextXAlignment = Enum.TextXAlignment.Left
-textLabel.TextYAlignment = Enum.TextYAlignment.Top
-textLabel.Font = Enum.Font.Code
-textLabel.TextSize = 12
-textLabel.RichText = true
-textLabel.Parent = scroll
+local listLayout = Instance.new("UIListLayout", scroll)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- 2. Turbo Logic
-local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedFirst", "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"}
+-- 2. Heavy-Duty Scanning Engine
+local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedStorage", "StarterGui"}
 
-local function getIcon(obj)
-    if obj:IsA("LuaSourceContainer") then return "📜"
-    elseif obj:IsA("Folder") then return "📂"
-    elseif obj:IsA("Model") then return "🧱"
-    elseif obj:IsA("BasePart") then return "◻️"
-    else return "🔹" end
+local function createLine(text, order)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 16)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Text = text
+    label.Font = Enum.Font.Code
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.LayoutOrder = order
+    label.RichText = true
+    label.Parent = scroll
 end
 
-local function fastScan()
-    local log = {}
+local function heavyScan()
     local total = 0
     
     for _, sName in ipairs(SERVICES) do
         local serv = game:GetService(sName)
-        table.insert(log, "<b>[" .. sName .. "]</b>")
+        createLine("<b>[" .. sName .. "]</b>", total)
         
-        -- Non-recursive stack for max speed
         local stack = {{serv, 0}}
         while #stack > 0 do
             local current = table.remove(stack)
             local obj, depth = current[1], current[2]
             
             if obj ~= serv then
+                total = total + 1
                 local indent = string.rep("  ", depth)
-                table.insert(log, indent .. getIcon(obj) .. " " .. obj.Name .. " <font color='#666'>[" .. obj.ClassName .. "]</font>")
+                local icon = obj:IsA("LuaSourceContainer") and "📜" or "🔹"
+                
+                -- Optimization: Only create labels for scripts/folders if the game is TOO big
+                -- If you want EVERY part, keep the line below.
+                createLine(indent .. icon .. " " .. obj.Name .. " <font color='#555'>[" .. obj.ClassName .. "]</font>", total)
             end
             
-            total = total + 1
-            -- Yield only when necessary to keep UI responsive
-            if total % 2000 == 0 then 
-                title.Text = "Scanning: " .. total
+            -- Dynamic Yielding: Higher threshold for massive games
+            if total % 400 == 0 then 
+                title.Text = "Rendering: " .. total .. " objects..."
                 task.wait() 
             end
             
@@ -116,16 +98,11 @@ local function fastScan()
                 table.insert(stack, {children[i], depth + 1})
             end
         end
-        table.insert(log, "") -- Spacer
     end
-    
-    textLabel.Text = table.concat(log, "\n")
-    title.Text = "Scan Finished (" .. total .. " items)"
+    title.Text = "Scan Complete: " .. total .. " items"
 end
 
--- 3. Interactivity
-closeBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
+-- 3. Controls
 toggleBtn.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
 
--- Initial Auto-Build
-task.spawn(fastScan)
+task.spawn(heavyScan)

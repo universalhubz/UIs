@@ -1,61 +1,100 @@
--- Settings
-local SCRIPT_NAME = "TradeMachine"
-local CHAR_DELAY = 0.01 -- Speed of typing (lower is faster)
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. Locate the Script in Workspace
-local target = game.Workspace:FindFirstChild(SCRIPT_NAME, true)
+-- 1. Persistent UI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "TradeMachineInspector"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
 
-if not target or not (target:IsA("Script") or target:IsA("LocalScript") or target:IsA("ModuleScript")) then
-    warn("Could not find a script named '" .. SCRIPT_NAME .. "' in Workspace.")
-    return
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0.4, 0, 0.6, 0)
+mainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame)
+
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 35)
+header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+header.Parent = mainFrame
+Instance.new("UICorner", header)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Target: Workspace.TradeMachine"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.SourceSansBold
+title.Parent = header
+
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -10, 1, -45)
+scroll.Position = UDim2.new(0, 5, 0, 40)
+scroll.BackgroundTransparency = 1
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scroll.ScrollBarThickness = 4
+scroll.Parent = mainFrame
+
+local contentLabel = Instance.new("TextLabel")
+contentLabel.Size = UDim2.new(1, 0, 0, 0)
+contentLabel.AutomaticSize = Enum.AutomaticSize.Y
+contentLabel.BackgroundTransparency = 1
+contentLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
+contentLabel.TextSize = 13
+contentLabel.Font = Enum.Font.Code
+contentLabel.TextXAlignment = Enum.TextXAlignment.Left
+contentLabel.TextYAlignment = Enum.TextYAlignment.Top
+contentLabel.RichText = true
+contentLabel.Text = "Awaiting Target..."
+contentLabel.Parent = scroll
+
+-- 2. Target Logic
+local function getDeepValue(obj)
+	-- If it's a ValueObject, show what's written inside it
+	if obj:IsA("StringValue") or obj:IsA("TextValue") then
+		return " = <font color='#ffffff'>\"" .. obj.Value .. "\"</font>"
+	elseif obj:IsA("IntValue") or obj:IsA("NumberValue") or obj:IsA("BoolValue") then
+		return " = <font color='#ffaa00'>" .. tostring(obj.Value) .. "</font>"
+	elseif obj:IsA("ObjectValue") then
+		return " = <font color='#aaaaaa'>" .. (obj.Value and obj.Value.Name or "nil") .. "</font>"
+	end
+	return ""
 end
 
--- 2. Determine the UI Parent (PlayerGui if playing, StarterGui if editing)
-local uiParent = game:GetService("CoreGui"):FindFirstChild("RobloxGui") or 
-                 (game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")) or 
-                 game:GetService("StarterGui")
+local function updateInspector()
+	local target = workspace:FindFirstChild("TradeMachine", true)
+	
+	if target then
+		local log = {}
+		table.insert(log, "<b>[ROOT] " .. target.Name .. " (" .. target.ClassName .. ")</b>")
+		table.insert(log, "Path: " .. target:GetFullName())
+		table.insert(log, string.rep("—", 20))
+		
+		local children = target:GetChildren()
+		if #children > 0 then
+			for _, child in ipairs(children) do
+				local valSuffix = getDeepValue(child)
+				local icon = child:IsA("RemoteEvent") and "📡 " or (child:IsA("ModuleScript") and "📦 " or "🔹 ")
+				table.insert(log, icon .. child.Name .. " <font color='#666'>[" .. child.ClassName .. "]</font>" .. valSuffix)
+			end
+		else
+			table.insert(log, "<i>No children found inside script.</i>")
+		end
+		
+		contentLabel.Text = table.concat(log, "\n")
+	else
+		contentLabel.Text = "<font color='#ff4444'>[!] TradeMachine not found in Workspace.</font>"
+	end
+end
 
--- 3. Build the UI from scratch
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "UniversalCodeViewer"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = uiParent
-
-local textLabel = Instance.new("TextLabel")
-textLabel.Size = UDim2.new(0.5, 0, 0.7, 0)
-textLabel.Position = UDim2.new(0.25, 0, 0.15, 0)
-textLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Dark background
-textLabel.TextColor3 = Color3.fromRGB(0, 255, 150) -- "Hacker" teal/green
-textLabel.TextXAlignment = Enum.TextXAlignment.Left
-textLabel.TextYAlignment = Enum.TextYAlignment.Top
-textLabel.Font = Enum.Font.Code
-textLabel.TextSize = 14
-textLabel.TextWrapped = true
-textLabel.Text = ""
-textLabel.Parent = screenGui
-
--- Add UI Stroke for a clean border
-local stroke = Instance.new("UIStroke")
-stroke.Thickness = 2
-stroke.Color = Color3.fromRGB(100, 100, 100)
-stroke.Parent = textLabel
-
--- Add Padding
-local padding = Instance.new("UIPadding")
-padding.PaddingLeft = UDim.new(0, 15)
-padding.PaddingTop = UDim.new(0, 15)
-padding.Parent = textLabel
-
--- 4. The Typing Logic
-local fullCode = target.Source
-
+-- 3. Auto-Loop (Updates every 1 second for live tracking)
 task.spawn(function()
-    for i = 1, #fullCode do
-        textLabel.Text = string.sub(fullCode, 1, i)
-        -- Quick skip for spaces to make it feel more natural
-        if string.sub(fullCode, i, i) ~= " " then
-            task.wait(CHAR_DELAY)
-        end
-    end
-    print("Done typing insides of " .. SCRIPT_NAME)
+	while true do
+		updateInspector()
+		task.wait(1)
+	end
 end)

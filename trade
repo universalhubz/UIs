@@ -66,7 +66,7 @@ local function getDeepValue(obj)
 end
 
 local function updateInspector()
-	local target = workspace:FindFirstChild("TradeMachine", true)
+	local target = workspace:FindFirstChild("Machine", true)
 	
 	if target then
 		local log = {}

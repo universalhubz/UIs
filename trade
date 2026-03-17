@@ -1,0 +1,59 @@
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+local tradeMachine = Workspace:WaitForChild("TradeMachine")
+
+-- Helper: Freeze or Unfreeze a player's character
+local function setFreeze(player, state)
+    if not player or not player.Character then return end
+    local root = player.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.Anchored = state
+    end
+end
+
+-- Universal Remote Firer: Finds and triggers any acceptance-related remotes
+local function fireTradeRemotes(folder, arg)
+    for _, obj in pairs(folder:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            local name = obj.Name:lower()
+            -- Matches common naming conventions for trade systems
+            if name:find("accept") or name:find("confirm") or name:find("complete") or name:find("trade") then
+                obj:FireServer(arg)
+                print("Universal: Triggered " .. obj.Name)
+            end
+        end
+    end
+end
+
+-- Main Logic Loop
+-- Using a loop or a generic child-added listener makes it more "Universal"
+local function onTradeStarted(p1, p2)
+    print("Trade Intercepted. Freezing players...")
+    setFreeze(p1, true)
+    setFreeze(p2, true)
+
+    -- Phase 1: Initial Accept
+    task.wait(3.1) -- Slightly over 3s to clear internal game cooldowns
+    fireTradeRemotes(tradeMachine, true)
+
+    -- Phase 2: Final Confirm
+    task.wait(3.1)
+    fireTradeRemotes(tradeMachine, true)
+
+    -- Final Safety: Unfreeze after a delay
+    task.wait(2)
+    setFreeze(p1, false)
+    setFreeze(p2, false)
+end
+
+-- Trigger: This assumes TradeMachine has some form of signal. 
+-- If it doesn't, we can monitor for a specific 'Trading' attribute/Value.
+if tradeMachine:FindFirstChild("TradeStarted") then
+    tradeMachine.TradeStarted.Event:Connect(onTradeStarted)
+else
+    -- Fallback: Watch for any player getting a 'Trading' tag/value inside the machine
+    tradeMachine.ChildAdded:Connect(function(child)
+        -- Logic to detect a new trade instance and run onTradeStarted
+    end)
+end

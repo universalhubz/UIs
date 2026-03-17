@@ -2,9 +2,9 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. Persistent UI
+-- 1. Persistent UI Setup
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "UnlimitedExplorer"
+screenGui.Name = "FocusedExplorer"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
@@ -12,13 +12,15 @@ local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 80, 0, 30)
 toggleBtn.Position = UDim2.new(0, 5, 0.4, 0)
 toggleBtn.Text = "EXPLORER"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleBtn.Parent = screenGui
 Instance.new("UICorner", toggleBtn)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0.9, 0, 0.8, 0)
 mainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame)
 
@@ -31,7 +33,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 1, 0)
 title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Loading Heavy Game Data..."
+title.Text = "Filtering Scripts & Models..."
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
@@ -40,7 +42,6 @@ local scroll = Instance.new("ScrollingFrame")
 scroll.Size = UDim2.new(1, -10, 1, -40)
 scroll.Position = UDim2.new(0, 5, 0, 40)
 scroll.BackgroundTransparency = 1
-scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 scroll.ScrollBarThickness = 4
 scroll.Parent = mainFrame
@@ -48,48 +49,58 @@ scroll.Parent = mainFrame
 local listLayout = Instance.new("UIListLayout", scroll)
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- 2. Heavy-Duty Scanning Engine
-local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedStorage", "StarterGui"}
+-- 2. Logic: Filtering for Scripts, Models, and Services
+local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"}
 
-local function createLine(text, order)
+local function createLine(text, order, color)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 16)
+    label.Size = UDim2.new(1, 0, 0, 18)
     label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextColor3 = color or Color3.fromRGB(200, 200, 200)
     label.Text = text
     label.Font = Enum.Font.Code
-    label.TextSize = 12
+    label.TextSize = 13
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.LayoutOrder = order
     label.RichText = true
     label.Parent = scroll
 end
 
-local function heavyScan()
+local function performFocusedScan()
+    -- Clear existing list if refreshing
+    for _, child in ipairs(scroll:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+
     local total = 0
     
     for _, sName in ipairs(SERVICES) do
         local serv = game:GetService(sName)
-        createLine("<b>[" .. sName .. "]</b>", total)
+        createLine("<b>⚙️ " .. sName .. "</b>", total, Color3.fromRGB(255, 255, 100))
+        total = total + 1
         
-        local stack = {{serv, 0}}
+        local stack = {{serv, 1}}
         while #stack > 0 do
             local current = table.remove(stack)
             local obj, depth = current[1], current[2]
             
-            if obj ~= serv then
-                total = total + 1
+            -- CHECK: Is it a Script, Model, or Folder?
+            local isScript = obj:IsA("LuaSourceContainer")
+            local isModel = obj:IsA("Model")
+            local isFolder = obj:IsA("Folder")
+
+            if obj ~= serv and (isScript or isModel or isFolder) then
                 local indent = string.rep("  ", depth)
-                local icon = obj:IsA("LuaSourceContainer") and "📜" or "🔹"
+                local icon = isScript and "📜 " or (isModel and "🧱 " or "📂 ")
+                local color = isScript and Color3.fromRGB(120, 180, 255) or Color3.fromRGB(200, 200, 200)
                 
-                -- Optimization: Only create labels for scripts/folders if the game is TOO big
-                -- If you want EVERY part, keep the line below.
-                createLine(indent .. icon .. " " .. obj.Name .. " <font color='#555'>[" .. obj.ClassName .. "]</font>", total)
+                createLine(indent .. icon .. obj.Name .. " <font color='#666'>[" .. obj.ClassName .. "]</font>", total, color)
+                total = total + 1
             end
             
-            -- Dynamic Yielding: Higher threshold for massive games
-            if total % 400 == 0 then 
-                title.Text = "Rendering: " .. total .. " objects..."
+            -- Yield for performance
+            if total % 500 == 0 then 
+                title.Text = "Objects Mapped: " .. total
                 task.wait() 
             end
             
@@ -99,10 +110,10 @@ local function heavyScan()
             end
         end
     end
-    title.Text = "Scan Complete: " .. total .. " items"
+    title.Text = "Scan Finished (" .. total .. " entries)"
 end
 
 -- 3. Controls
 toggleBtn.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
 
-task.spawn(heavyScan)
+task.spawn(performFocusedScan)

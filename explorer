@@ -4,18 +4,9 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- 1. Persistent UI Setup
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FocusedExplorer"
+screenGui.Name = "TurboExplorerPro"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
-
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 80, 0, 30)
-toggleBtn.Position = UDim2.new(0, 5, 0.4, 0)
-toggleBtn.Text = "EXPLORER"
-toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Parent = screenGui
-Instance.new("UICorner", toggleBtn)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0.9, 0, 0.8, 0)
@@ -24,96 +15,135 @@ mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame)
 
+-- Header & Controls
 local header = Instance.new("Frame")
-header.Size = UDim2.new(1, 0, 0, 35)
+header.Size = UDim2.new(1, 0, 0, 80) -- Taller to fit search bar
 header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 header.Parent = mainFrame
+Instance.new("UICorner", header)
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 1, 0)
+title.Size = UDim2.new(0.5, 0, 0, 40)
 title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Filtering Scripts & Models..."
+title.Text = "Pro Explorer"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
 
+local searchBar = Instance.new("TextBox")
+searchBar.Size = UDim2.new(0.95, 0, 0, 30)
+searchBar.Position = UDim2.new(0.025, 0, 0.55, 0)
+searchBar.PlaceholderText = "Search for a script or model name..."
+searchBar.Text = ""
+searchBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+searchBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBar.Parent = header
+Instance.new("UICorner", searchBar)
+
+local stopBtn = Instance.new("TextButton")
+stopBtn.Size = UDim2.new(0, 70, 0, 30)
+stopBtn.Position = UDim2.new(1, -80, 0, 5)
+stopBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+stopBtn.Text = "STOP"
+stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+stopBtn.Parent = header
+Instance.new("UICorner", stopBtn)
+
+-- Scrolling Body
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -10, 1, -40)
-scroll.Position = UDim2.new(0, 5, 0, 40)
+scroll.Size = UDim2.new(1, -10, 1, -90)
+scroll.Position = UDim2.new(0, 5, 0, 85)
 scroll.BackgroundTransparency = 1
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scroll.ScrollBarThickness = 4
+scroll.ScrollBarThickness = 5
 scroll.Parent = mainFrame
 
 local listLayout = Instance.new("UIListLayout", scroll)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- 2. Logic: Filtering for Scripts, Models, and Services
-local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"}
+-- 2. Logic & States
+local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedStorage", "StarterGui", "StarterPack"}
+local isScanning = false
+local stopRequested = false
 
-local function createLine(text, order, color)
+local function createLine(text, color)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 18)
+    label.Size = UDim2.new(1, 0, 0, 20)
     label.BackgroundTransparency = 1
     label.TextColor3 = color or Color3.fromRGB(200, 200, 200)
     label.Text = text
     label.Font = Enum.Font.Code
     label.TextSize = 13
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.LayoutOrder = order
     label.RichText = true
     label.Parent = scroll
 end
 
-local function performFocusedScan()
-    -- Clear existing list if refreshing
-    for _, child in ipairs(scroll:GetChildren()) do
-        if child:IsA("TextLabel") then child:Destroy() end
+local function scan(filter)
+    if isScanning then return end
+    isScanning = true
+    stopRequested = false
+    
+    -- Clear current list
+    for _, v in ipairs(scroll:GetChildren()) do
+        if v:IsA("TextLabel") then v:Destroy() end
     end
 
     local total = 0
-    
+    local searchTerm = filter and filter:lower() or ""
+
     for _, sName in ipairs(SERVICES) do
-        local serv = game:GetService(sName)
-        createLine("<b>⚙️ " .. sName .. "</b>", total, Color3.fromRGB(255, 255, 100))
-        total = total + 1
+        if stopRequested then break end
         
+        local serv = game:GetService(sName)
         local stack = {{serv, 1}}
+        
         while #stack > 0 do
+            if stopRequested then break end
+            
             local current = table.remove(stack)
             local obj, depth = current[1], current[2]
-            
-            -- CHECK: Is it a Script, Model, or Folder?
-            local isScript = obj:IsA("LuaSourceContainer")
-            local isModel = obj:IsA("Model")
-            local isFolder = obj:IsA("Folder")
 
-            if obj ~= serv and (isScript or isModel or isFolder) then
-                local indent = string.rep("  ", depth)
-                local icon = isScript and "📜 " or (isModel and "🧱 " or "📂 ")
-                local color = isScript and Color3.fromRGB(120, 180, 255) or Color3.fromRGB(200, 200, 200)
+            -- FILTER: Scripts, Models, Folders
+            if obj ~= serv and (obj:IsA("LuaSourceContainer") or obj:IsA("Model") or obj:IsA("Folder")) then
+                local nameMatch = obj.Name:lower():find(searchTerm)
                 
-                createLine(indent .. icon .. obj.Name .. " <font color='#666'>[" .. obj.ClassName .. "]</font>", total, color)
-                total = total + 1
+                if searchTerm == "" or nameMatch then
+                    local indent = string.rep("  ", depth)
+                    local icon = obj:IsA("LuaSourceContainer") and "📜 " or (obj:IsA("Model") and "🧱 " or "📂 ")
+                    local color = obj:IsA("LuaSourceContainer") and Color3.fromRGB(100, 200, 255) or Color3.fromRGB(200, 200, 200)
+                    
+                    createLine(indent .. icon .. obj.Name .. " <font color='#666'>[" .. obj.ClassName .. "]</font>", color)
+                    total = total + 1
+                end
             end
-            
-            -- Yield for performance
-            if total % 500 == 0 then 
-                title.Text = "Objects Mapped: " .. total
+
+            -- Performance Yield
+            if total % 300 == 0 then 
+                title.Text = "Rendering: " .. total .. (stopRequested and " (STOPPED)" or "")
                 task.wait() 
             end
-            
-            local children = obj:GetChildren()
-            for i = #children, 1, -1 do
-                table.insert(stack, {children[i], depth + 1})
+
+            for _, child in ipairs(obj:GetChildren()) do
+                table.insert(stack, {child, depth + 1})
             end
         end
     end
-    title.Text = "Scan Finished (" .. total .. " entries)"
+    
+    title.Text = stopRequested and "Stopped at " .. total or "Found: " .. total
+    isScanning = false
 end
 
--- 3. Controls
-toggleBtn.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
+-- 3. Events
+stopBtn.MouseButton1Click:Connect(function()
+    stopRequested = true
+end)
 
-task.spawn(performFocusedScan)
+searchBar.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        scan(searchBar.Text)
+    end
+end)
+
+-- Initial scan (Optional, can be left blank for user to search first)
+task.spawn(function() scan("") end)

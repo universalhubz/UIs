@@ -2,73 +2,64 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. Create the Persistent UI
+-- 1. Create Persistent UI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ConstantExplorerUI"
-screenGui.ResetOnSpawn = false -- This makes it "constant" through deaths
-screenGui.IgnoreGuiInset = true
+screenGui.Name = "TurboExplorerUI"
+screenGui.ResetOnSpawn = false -- Keeps it active after death
 screenGui.Parent = playerGui
+
+-- Toggle Button (Small button to re-open the UI if closed)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 80, 0, 30)
+toggleBtn.Position = UDim2.new(0, 10, 0.5, -15) -- Left side center
+toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+toggleBtn.Text = "EXPLORER"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.Parent = screenGui
+Instance.new("UICorner", toggleBtn)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0.9, 0, 0.8, 0)
 mainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-mainFrame.BorderSizePixel = 0
 mainFrame.Visible = true
 mainFrame.Parent = screenGui
-
-local corner = Instance.new("UICorner", mainFrame)
+Instance.new("UICorner", mainFrame)
 
 -- Header
 local header = Instance.new("Frame")
 header.Size = UDim2.new(1, 0, 0, 40)
 header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 header.Parent = mainFrame
-
-local headerCorner = Instance.new("UICorner", header)
+Instance.new("UICorner", header)
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(0.6, 0, 1, 0)
+title.Size = UDim2.new(0.5, 0, 1, 0)
 title.Position = UDim2.new(0, 15, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Game Explorer"
+title.Text = "Turbo Explorer"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Font = Enum.Font.SourceSansBold
-title.TextSize = 18
 title.Parent = header
 
--- Close Button
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 35, 0, 35)
 closeBtn.Position = UDim2.new(1, -40, 0, 2.5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
 closeBtn.Text = "X"
 closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Font = Enum.Font.SourceSansBold
-closeBtn.TextSize = 18
 closeBtn.Parent = header
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 
--- Refresh Button (To make it constant/re-scannable)
-local refreshBtn = Instance.new("TextButton")
-refreshBtn.Size = UDim2.new(0, 80, 0, 30)
-refreshBtn.Position = UDim2.new(1, -130, 0, 5)
-refreshBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-refreshBtn.Text = "Refresh"
-refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-refreshBtn.Font = Enum.Font.SourceSansBold
-refreshBtn.TextSize = 14
-refreshBtn.Parent = header
-Instance.new("UICorner", refreshBtn)
-
--- Scrolling Body
+-- Content Area
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 1, -55)
-scroll.Position = UDim2.new(0, 10, 0, 45)
+scroll.Size = UDim2.new(1, -10, 1, -50)
+scroll.Position = UDim2.new(0, 5, 0, 45)
 scroll.BackgroundTransparency = 1
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scroll.ScrollBarThickness = 5
+scroll.ScrollBarThickness = 4
 scroll.Parent = mainFrame
 
 local textLabel = Instance.new("TextLabel")
@@ -81,82 +72,60 @@ textLabel.TextYAlignment = Enum.TextYAlignment.Top
 textLabel.Font = Enum.Font.Code
 textLabel.TextSize = 12
 textLabel.RichText = true
-textLabel.Text = "Tap Refresh to scan..."
 textLabel.Parent = scroll
 
--- 2. Performance Scan Logic
+-- 2. Turbo Logic
 local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedFirst", "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"}
 
 local function getIcon(obj)
-	if obj:IsA("Script") then return "📜"
-	elseif obj:IsA("LocalScript") then return "💻"
-	elseif obj:IsA("ModuleScript") then return "📦"
-	elseif obj:IsA("Folder") then return "📂"
-	elseif obj:IsA("Model") then return "🧱"
-	elseif obj:IsA("BasePart") then return "◻️"
-	else return "🔹" end
+    if obj:IsA("LuaSourceContainer") then return "📜"
+    elseif obj:IsA("Folder") then return "📂"
+    elseif obj:IsA("Model") then return "🧱"
+    elseif obj:IsA("BasePart") then return "◻️"
+    else return "🔹" end
 end
 
-local function performScan()
-	local fullLog = {}
-	local totalCount = 0
-	
-	for _, sName in ipairs(SERVICES) do
-		local serv = game:GetService(sName)
-		table.insert(fullLog, "<b>[" .. sName .. "]</b>")
-		
-		-- Use a stack to avoid recursion depth issues
-		local stack = {{serv, 1}}
-		while #stack > 0 do
-			local data = table.remove(stack)
-			local obj, depth = data[1], data[2]
-			
-			if obj ~= serv then
-				local indent = string.rep("  ", depth)
-				table.insert(fullLog, indent .. getIcon(obj) .. " " .. obj.Name .. " <font color='#777777'>[" .. obj.ClassName .. "]</font>")
-			end
-			
-			totalCount = totalCount + 1
-			if totalCount % 1500 == 0 then 
-				title.Text = "Scanning: " .. totalCount
-				task.wait() 
-			end
-			
-			local children = obj:GetChildren()
-			for i = #children, 1, -1 do
-				table.insert(stack, {children[i], depth + 1})
-			end
-		end
-		table.insert(fullLog, "") -- Spacer between services
-	end
-	
-	textLabel.Text = table.concat(fullLog, "\n")
-	title.Text = "Explorer (" .. totalCount .. " items)"
+local function fastScan()
+    local log = {}
+    local total = 0
+    
+    for _, sName in ipairs(SERVICES) do
+        local serv = game:GetService(sName)
+        table.insert(log, "<b>[" .. sName .. "]</b>")
+        
+        -- Non-recursive stack for max speed
+        local stack = {{serv, 0}}
+        while #stack > 0 do
+            local current = table.remove(stack)
+            local obj, depth = current[1], current[2]
+            
+            if obj ~= serv then
+                local indent = string.rep("  ", depth)
+                table.insert(log, indent .. getIcon(obj) .. " " .. obj.Name .. " <font color='#666'>[" .. obj.ClassName .. "]</font>")
+            end
+            
+            total = total + 1
+            -- Yield only when necessary to keep UI responsive
+            if total % 2000 == 0 then 
+                title.Text = "Scanning: " .. total
+                task.wait() 
+            end
+            
+            local children = obj:GetChildren()
+            for i = #children, 1, -1 do
+                table.insert(stack, {children[i], depth + 1})
+            end
+        end
+        table.insert(log, "") -- Spacer
+    end
+    
+    textLabel.Text = table.concat(log, "\n")
+    title.Text = "Scan Finished (" .. total .. " items)"
 end
 
--- 3. Button Events
-closeBtn.MouseButton1Click:Connect(function()
-	mainFrame.Visible = false -- Hides it instead of destroying it
-end)
+-- 3. Interactivity
+closeBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
+toggleBtn.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
 
-refreshBtn.MouseButton1Click:Connect(function()
-	textLabel.Text = "Scanning... please wait."
-	performScan()
-end)
-
--- Optional: Toggle Button to bring it back after closing
-local openBtn = Instance.new("TextButton")
-openBtn.Size = UDim2.new(0, 60, 0, 30)
-openBtn.Position = UDim2.new(0, 10, 0.9, 0)
-openBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-openBtn.Text = "Open Exp"
-openBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-openBtn.Parent = screenGui
-Instance.new("UICorner", openBtn)
-
-openBtn.MouseButton1Click:Connect(function()
-	mainFrame.Visible = not mainFrame.Visible
-end)
-
--- Auto-start the first scan
-task.spawn(performScan)
+-- Initial Auto-Build
+task.spawn(fastScan)

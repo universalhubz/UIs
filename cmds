@@ -2,133 +2,106 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. Create Mobile-Friendly UI
+-- 1. Create Mobile UI (Optimized for speed)
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileExplorerUI"
+screenGui.Name = "FastExplorerUI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
--- Main Container (Responsive Size)
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0.9, 0, 0.7, 0)
 mainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-mainFrame.BorderSizePixel = 0
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = mainFrame
-
--- Header/Title Bar
 local header = Instance.new("Frame")
-header.Size = UDim2.new(1, 0, 0, 40)
-header.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+header.Size = UDim2.new(1, 0, 0, 35)
+header.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 header.Parent = mainFrame
 
-local headerCorner = Instance.new("UICorner")
-headerCorner.CornerRadius = UDim.new(0, 10)
-headerCorner.Parent = header
-
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -50, 1, 0)
-title.Position = UDim2.new(0, 15, 0, 0)
+title.Size = UDim2.new(1, -40, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Script Explorer"
+title.Text = "Turbo Script Scan: Ready"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Font = Enum.Font.SourceSansBold
-title.TextSize = 18
+title.TextSize = 16
 title.Parent = header
 
--- Close Button (Essential for Mobile)
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 35, 0, 35)
-closeBtn.Position = UDim2.new(1, -40, 0, 2)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Font = Enum.Font.SourceSansBold
-closeBtn.TextSize = 20
-closeBtn.Parent = header
-
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(1, 0)
-btnCorner.Parent = closeBtn
-
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
--- Scrolling Area
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 1, -50)
-scroll.Position = UDim2.new(0, 10, 0, 45)
+scroll.Size = UDim2.new(1, -10, 1, -45)
+scroll.Position = UDim2.new(0, 5, 0, 40)
 scroll.BackgroundTransparency = 1
-scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scroll.ScrollBarThickness = 6
+scroll.ScrollBarThickness = 4
 scroll.Parent = mainFrame
 
 local textLabel = Instance.new("TextLabel")
 textLabel.Size = UDim2.new(1, 0, 0, 0)
 textLabel.AutomaticSize = Enum.AutomaticSize.Y
 textLabel.BackgroundTransparency = 1
-textLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+textLabel.TextColor3 = Color3.fromRGB(200, 255, 200) -- Greenish for visibility
 textLabel.TextXAlignment = Enum.TextXAlignment.Left
 textLabel.TextYAlignment = Enum.TextYAlignment.Top
 textLabel.Font = Enum.Font.Code
-textLabel.TextSize = 14
+textLabel.TextSize = 13
 textLabel.RichText = true
-textLabel.Text = "Gathering data..."
+textLabel.Text = "Preparing turbo scan..."
 textLabel.Parent = scroll
 
--- 2. Scanning Logic
-local SERVICES = {
-    "Workspace", "Players", "Lighting", "ReplicatedFirst", 
-    "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"
-}
+-- 2. Fast Scanning Logic
+local SERVICES = {"Workspace", "Players", "Lighting", "ReplicatedFirst", "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"}
 
-local function hasScript(obj)
-    if obj:IsA("LuaSourceContainer") then return true end
-    for _, child in ipairs(obj:GetChildren()) do
-        if hasScript(child) then return true end
-    end
-    return false
-end
-
-local function scan(obj, depth)
-    if (obj:IsA("Folder") or obj:IsA("Model")) and not hasScript(obj) then return "" end
-    if obj:IsA("BasePart") and not obj:IsA("LuaSourceContainer") then return "" end
-
-    local indent = string.rep("  ", depth)
-    local icon = "• "
+local function getTurboLayout()
+    local finalStr = ""
     
-    if obj:IsA("Script") then icon = "📜 " 
-    elseif obj:IsA("LocalScript") then icon = "💻 " 
-    elseif obj:IsA("ModuleScript") then icon = "📦 " 
-    elseif obj:IsA("Folder") or obj:IsA("Model") then icon = "📂 "
-    elseif obj:IsA("ServiceProvider") then icon = "⚙️ " 
-    end
-
-    local line = indent .. icon .. obj.Name .. " <font color='#888888'>[" .. obj.ClassName .. "]</font>\n"
-    
-    for _, child in ipairs(obj:GetChildren()) do
-        line = line .. scan(child, depth + 1)
-    end
-    
-    return line
-end
-
--- 3. Run Build
-task.spawn(function()
-    local output = ""
     for _, sName in ipairs(SERVICES) do
-        local ok, serv = pcall(game.GetService, game, sName)
-        if ok and serv then
-            local data = scan(serv, 0)
-            if #data > 0 then output = output .. data .. "\n" end
+        local serv = game:GetService(sName)
+        title.Text = "Scanning " .. sName .. "..."
+        task.wait() -- Keep UI alive
+        
+        -- Get ALL scripts at once
+        local descendants = serv:GetDescendants()
+        local scriptFoundInService = false
+        local serviceOutput = "<b>[" .. sName .. "]</b>\n"
+        
+        for i, obj in ipairs(descendants) do
+            if obj:IsA("LuaSourceContainer") then
+                scriptFoundInService = true
+                
+                -- Construct path
+                local path = obj.Name
+                local parent = obj.Parent
+                while parent ~= serv do
+                    path = parent.Name .. " > " .. path
+                    parent = parent.Parent
+                end
+                
+                local icon = obj:IsA("LocalScript") and "💻" or (obj:IsA("ModuleScript") and "📦" or "📜")
+                serviceOutput = serviceOutput .. "  " .. icon .. " " .. path .. " <font color='#888888'>[" .. obj.ClassName .. "]</font>\n"
+            end
+            
+            -- Yield only occasionally to maintain high speed
+            if i % 500 == 0 then task.wait() end
+        end
+        
+        if scriptFoundInService then
+            finalStr = finalStr .. serviceOutput .. "\n"
         end
     end
-    textLabel.Text = #output > 0 and output or "No scripts found."
+    
+    return finalStr
+end
+
+-- 3. Run
+task.spawn(function()
+    local start = tick()
+    local results = getTurboLayout()
+    local duration = math.floor((tick() - start) * 100) / 100
+    
+    title.Text = "Scan Finished in " .. duration .. "s"
+    textLabel.Text = #results > 0 and results or "No scripts found."
 end)

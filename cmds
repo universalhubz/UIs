@@ -2,55 +2,106 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. Create the UI Hierarchy
+-- 1. Create Mobile-Friendly UI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ExplorerExportUI"
+screenGui.Name = "MobileExplorerUI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
-local scrollingFrame = Instance.new("ScrollingFrame")
-scrollingFrame.Size = UDim2.new(0.4, 0, 0.6, 0)
-scrollingFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
-scrollingFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-scrollingFrame.BorderSizePixel = 2
-scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will auto-adjust
-scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scrollingFrame.Parent = screenGui
+-- Main Container (Responsive Size)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0.9, 0, 0.7, 0)
+mainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- Header/Title Bar
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 40)
+header.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+header.Parent = mainFrame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 10)
+headerCorner.Parent = header
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -50, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Script Explorer"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+title.Parent = header
+
+-- Close Button (Essential for Mobile)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 35, 0, 35)
+closeBtn.Position = UDim2.new(1, -40, 0, 2)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 20
+closeBtn.Parent = header
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(1, 0)
+btnCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Scrolling Area
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -20, 1, -50)
+scroll.Position = UDim2.new(0, 10, 0, 45)
+scroll.BackgroundTransparency = 1
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scroll.ScrollBarThickness = 6
+scroll.Parent = mainFrame
 
 local textLabel = Instance.new("TextLabel")
-textLabel.Size = UDim2.new(1, -20, 0, 0)
+textLabel.Size = UDim2.new(1, 0, 0, 0)
 textLabel.AutomaticSize = Enum.AutomaticSize.Y
 textLabel.BackgroundTransparency = 1
-textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+textLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
 textLabel.TextXAlignment = Enum.TextXAlignment.Left
 textLabel.TextYAlignment = Enum.TextYAlignment.Top
 textLabel.Font = Enum.Font.Code
 textLabel.TextSize = 14
 textLabel.RichText = true
-textLabel.Text = "Scanning Game... Please wait.\n"
-textLabel.Parent = scrollingFrame
+textLabel.Text = "Gathering data..."
+textLabel.Parent = scroll
 
--- 2. Configuration
+-- 2. Scanning Logic
 local SERVICES = {
     "Workspace", "Players", "Lighting", "ReplicatedFirst", 
-    "ReplicatedStorage", "StarterGui", "StarterPack", 
-    "StarterPlayer", "Teams", "SoundService"
+    "ReplicatedStorage", "StarterGui", "StarterPack", "StarterPlayer"
 }
 
--- 3. Logic Functions
-local function hasScriptDescendant(obj)
+local function hasScript(obj)
     if obj:IsA("LuaSourceContainer") then return true end
     for _, child in ipairs(obj:GetChildren()) do
-        if hasScriptDescendant(child) then return true end
+        if hasScript(child) then return true end
     end
     return false
 end
 
 local function scan(obj, depth)
-    if (obj:IsA("Folder") or obj:IsA("Model")) and not hasScriptDescendant(obj) then return "" end
+    if (obj:IsA("Folder") or obj:IsA("Model")) and not hasScript(obj) then return "" end
     if obj:IsA("BasePart") and not obj:IsA("LuaSourceContainer") then return "" end
 
-    local indent = string.rep("    ", depth)
+    local indent = string.rep("  ", depth)
     local icon = "• "
     
     if obj:IsA("Script") then icon = "📜 " 
@@ -60,7 +111,7 @@ local function scan(obj, depth)
     elseif obj:IsA("ServiceProvider") then icon = "⚙️ " 
     end
 
-    local line = indent .. icon .. obj.Name .. " <font color='#aaaaaa'>[" .. obj.ClassName .. "]</font>\n"
+    local line = indent .. icon .. obj.Name .. " <font color='#888888'>[" .. obj.ClassName .. "]</font>\n"
     
     for _, child in ipairs(obj:GetChildren()) do
         line = line .. scan(child, depth + 1)
@@ -69,19 +120,15 @@ local function scan(obj, depth)
     return line
 end
 
--- 4. Execute
+-- 3. Run Build
 task.spawn(function()
-    local finalOutput = "<b>[GAME EXPLORER SCRIPT LAYOUT]</b>\n\n"
-    
-    for _, serviceName in ipairs(SERVICES) do
-        local success, serv = pcall(function() return game:GetService(serviceName) end)
-        if success and serv then
-            local serviceData = scan(serv, 0)
-            if #serviceData > 0 then
-                finalOutput = finalOutput .. serviceData .. "\n"
-            end
+    local output = ""
+    for _, sName in ipairs(SERVICES) do
+        local ok, serv = pcall(game.GetService, game, sName)
+        if ok and serv then
+            local data = scan(serv, 0)
+            if #data > 0 then output = output .. data .. "\n" end
         end
     end
-    
-    textLabel.Text = finalOutput
+    textLabel.Text = #output > 0 and output or "No scripts found."
 end)

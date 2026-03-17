@@ -1,52 +1,61 @@
 -- Settings
-local TARGET_SCRIPT_NAME = "TradeMachine"
-local TYPING_SPEED = 0.01 -- Lower = Faster
+local SCRIPT_NAME = "TradeMachine"
+local CHAR_DELAY = 0.01 -- Speed of typing (lower is faster)
 
--- 1. Find the Target Script
-local target = game.Workspace:FindFirstChild(TARGET_SCRIPT_NAME, true)
+-- 1. Locate the Script in Workspace
+local target = game.Workspace:FindFirstChild(SCRIPT_NAME, true)
 
-if not target or not target:IsA("LuaSourceContainer") then
-    warn("Could not find a script named '" .. TARGET_SCRIPT_NAME .. "' in Workspace.")
+if not target or not (target:IsA("Script") or target:IsA("LocalScript") or target:IsA("ModuleScript")) then
+    warn("Could not find a script named '" .. SCRIPT_NAME .. "' in Workspace.")
     return
 end
 
--- 2. Build the UI
-local playerGui = game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui") 
-                 or game:GetService("StarterGui")
+-- 2. Determine the UI Parent (PlayerGui if playing, StarterGui if editing)
+local uiParent = game:GetService("CoreGui"):FindFirstChild("RobloxGui") or 
+                 (game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")) or 
+                 game:GetService("StarterGui")
 
+-- 3. Build the UI from scratch
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "CodeViewerGui"
+screenGui.Name = "UniversalCodeViewer"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
+screenGui.Parent = uiParent
 
 local textLabel = Instance.new("TextLabel")
-textLabel.Name = "CodeDisplay"
-textLabel.Size = UDim2.new(0.4, 0, 0.6, 0)
-textLabel.Position = UDim2.new(0.3, 0, 0.2, 0)
-textLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-textLabel.TextColor3 = Color3.fromRGB(0, 255, 0) -- Matrix Green
+textLabel.Size = UDim2.new(0.5, 0, 0.7, 0)
+textLabel.Position = UDim2.new(0.25, 0, 0.15, 0)
+textLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20) -- Dark background
+textLabel.TextColor3 = Color3.fromRGB(0, 255, 150) -- "Hacker" teal/green
 textLabel.TextXAlignment = Enum.TextXAlignment.Left
 textLabel.TextYAlignment = Enum.TextYAlignment.Top
 textLabel.Font = Enum.Font.Code
 textLabel.TextSize = 14
 textLabel.TextWrapped = true
-textLabel.ClearTextOnFocus = false
 textLabel.Text = ""
 textLabel.Parent = screenGui
 
--- Add some padding so the text isn't touching the edges
+-- Add UI Stroke for a clean border
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(100, 100, 100)
+stroke.Parent = textLabel
+
+-- Add Padding
 local padding = Instance.new("UIPadding")
-padding.PaddingLeft = UDim.new(0, 10)
-padding.PaddingTop = UDim.new(0, 10)
+padding.PaddingLeft = UDim.new(0, 15)
+padding.PaddingTop = UDim.new(0, 15)
 padding.Parent = textLabel
 
--- 3. The "Typing" Logic
-local sourceCode = target.Source
+-- 4. The Typing Logic
+local fullCode = target.Source
 
 task.spawn(function()
-    for i = 1, #sourceCode do
-        textLabel.Text = string.sub(sourceCode, 1, i)
-        task.wait(TYPING_SPEED)
+    for i = 1, #fullCode do
+        textLabel.Text = string.sub(fullCode, 1, i)
+        -- Quick skip for spaces to make it feel more natural
+        if string.sub(fullCode, i, i) ~= " " then
+            task.wait(CHAR_DELAY)
+        end
     end
-    print("Finished typing code from " .. TARGET_SCRIPT_NAME)
+    print("Done typing insides of " .. SCRIPT_NAME)
 end)

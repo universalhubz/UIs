@@ -1,115 +1,89 @@
--- [[ Advanced Bypass Utility: Jail, Bring, Goto, Freeze, Speed, Fly, Fling ]] --
+-- [[ Stealth Admin: Hyperion-Resistant Logic ]] --
 local Prefix = ":"
-local LocalPlayer = game:GetService("Players").LocalPlayer
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
 
-local States = {
-    Flying = false,
+local Settings = {
+    SpeedValue = 16,
+    IsFlying = false,
     Noclip = false,
-    Speed = 16,
     Frozen = {}
 }
 
--- Utility: Player Finder
+-- Optimized Player Search
 local function GetPlayer(name)
     name = (name or ""):lower()
-    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+    for _, p in ipairs(Players:GetPlayers()) do
         if p.Name:lower():sub(1, #name) == name or p.DisplayName:lower():sub(1, #name) == name then
             return p
         end
     end
 end
 
--- Stealth Noclip (Runs every frame to override server-side collision resets)
-RunService.Stepped:Connect(function()
-    if States.Noclip and LocalPlayer.Character then
-        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+-- HEARTBEAT BYPASS: Handles Noclip and Speed without triggering property-watchers
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+    if hrp and hum then
+        -- 1. Stealth Speed: Manual CFrame nudging (Bypasses WalkSpeed checks)
+        if Settings.SpeedValue > 16 and hum.MoveDirection.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + (hum.MoveDirection * (Settings.SpeedValue / 100))
+        end
+
+        -- 2. Stealth Noclip: Disables collisions during the physics step
+        if Settings.Noclip then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
         end
     end
 end)
 
--- Command Logic
-local function ExecuteCommand(msg)
+-- Command Processor
+local function Execute(msg)
     local args = msg:split(" ")
     local cmd = args[1]:sub(#Prefix + 1):lower()
     local target = GetPlayer(args[2])
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-    -- 1. SPEED (Bypass: Offsets CFrame to avoid WalkSpeed detection)
-    if cmd == "speed" then
-        States.Speed = tonumber(args[2]) or 16
-        task.spawn(function()
-            while States.Speed > 16 do
-                if hum and hum.MoveDirection.Magnitude > 0 then
-                    hrp.CFrame = hrp.CFrame + (hum.MoveDirection * (States.Speed / 50))
-                end
-                RunService.Heartbeat:Wait()
-            end
-        end)
-
-    -- 2. GOTO (Instant Local TP)
-    elseif cmd == "goto" and target and target.Character then
+    -- BYPASS: GOTO
+    if cmd == "goto" and target and target.Character then
         local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
         if hrp and tHRP then hrp.CFrame = tHRP.CFrame * CFrame.new(0, 0, 3) end
 
-    -- 3. BRING (Bypass Logic: Pulls target to your front CFrame)
+    -- BYPASS: BRING (Uses local physics pull)
     elseif cmd == "bring" and target and target.Character then
         local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
-        if hrp and tHRP then
-            -- Note: Requires physics ownership/touch in most games
-            tHRP.CFrame = hrp.CFrame * CFrame.new(0, 0, -4)
-        end
+        if tHRP then tHRP.CFrame = hrp.CFrame * CFrame.new(0, 0, -3) end
 
-    -- 4. FREEZE (Hard CFrame Lock)
+    -- BYPASS: FREEZE (Continuous CFrame Reset)
     elseif cmd == "freeze" and target then
-        States.Frozen[target.UserId] = true
+        Settings.Frozen[target.UserId] = true
         task.spawn(function()
-            local tHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-            while States.Frozen[target.UserId] and tHRP do
-                tHRP.CFrame = tHRP.CFrame -- Anchors them in place on your client
-                tHRP.Velocity = Vector3.new(0, 0, 0)
-                RunService.Heartbeat:Wait()
+            while Settings.Frozen[target.UserId] do
+                local tHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+                if tHRP then tHRP.CFrame = tHRP.CFrame end
+                task.wait()
             end
         end)
 
     elseif cmd == "unfreeze" and target then
-        States.Frozen[target.UserId] = nil
+        Settings.Frozen[target.UserId] = nil
 
-    -- 5. JAIL (Local Physics Cage)
-    elseif cmd == "jail" and target and target.Character then
-        local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
-        if tHRP then
-            local part = Instance.new("Part", workspace)
-            part.Size = Vector3.new(8, 10, 8)
-            part.Shape = Enum.PartType.Block
-            part.Transparency = 0.6
-            part.Material = Enum.Material.ForceField
-            part.Anchored = true
-            part.CanCollide = true
-            
-            task.spawn(function()
-                while tHRP.Parent and part.Parent do
-                    part.CFrame = tHRP.CFrame
-                    task.wait()
-                end
-                part:Destroy()
-            end)
-            -- Remove jail after 30 seconds
-            task.delay(30, function() part:Destroy() end)
-        end
+    -- BYPASS: SPEED SET
+    elseif cmd == "speed" then
+        Settings.SpeedValue = tonumber(args[2]) or 16
 
-    -- 6. FLY / NOCLIP (Standard Toggles)
-    elseif cmd == "fly" then
-        States.Flying = not States.Flying
-        -- [Insert Fly Logic from previous block here]
+    -- BYPASS: NOCLIP TOGGLE
     elseif cmd == "noclip" then
-        States.Noclip = not States.Noclip
+        Settings.Noclip = not Settings.Noclip
+        print("Noclip State: " .. tostring(Settings.Noclip))
     end
 end
 
-LocalPlayer.Chatted:Connect(ExecuteCommand)
-print("--- Bypass Suite Active: :speed, :goto, :bring, :freeze, :jail ---")
+LocalPlayer.Chatted:Connect(Execute)
+print("--- Stealth Admin Initialized ---")

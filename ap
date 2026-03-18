@@ -1,0 +1,73 @@
+-- Configuration
+local AdminID = game.Players.LocalPlayer and game.Players.LocalPlayer.UserId or 0 -- Auto-detects you
+local Prefix = ":"
+local JailParts = {}
+
+-- Function to find players by partial name
+local function GetPlayer(name)
+    name = name:lower()
+    for _, p in ipairs(game.Players:GetPlayers()) do
+        if p.Name:lower():sub(1, #name) == name then
+            return p
+        end
+    end
+end
+
+-- Command Logic
+local function ProcessCommand(speaker, message)
+    if not message:sub(1, 1) == Prefix then return end
+    
+    local args = message:sub(2):split(" ")
+    local cmd = args[1]:lower()
+    local targetName = args[2]
+    local target = targetName and GetPlayer(targetName)
+
+    -- Commands
+    if cmd == "kill" and target and target.Character then
+        target.Character:BreakJoints()
+        
+    elseif cmd == "jail" and target and target.Character then
+        local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local cage = Instance.new("Part")
+            cage.Size, cage.CFrame = Vector3.new(6, 10, 6), hrp.CFrame
+            cage.Anchored, cage.CanCollide = true, true
+            cage.Material, cage.Transparency = Enum.Material.ForceField, 0.5
+            cage.Color = Color3.fromRGB(255, 0, 0)
+            cage.Parent = workspace
+            hrp.Anchored = true
+            JailParts[target.Name] = cage
+        end
+
+    elseif cmd == "unjail" and target then
+        if JailParts[target.Name] then
+            JailParts[target.Name]:Destroy()
+            JailParts[target.Name] = nil
+        end
+        if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            target.Character.HumanoidRootPart.Anchored = false
+        end
+
+    elseif cmd == "bring" and target and speaker.Character then
+        local sRoot = speaker.Character:FindFirstChild("HumanoidRootPart")
+        local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
+        if sRoot and tRoot then
+            tRoot.CFrame = sRoot.CFrame * CFrame.new(0, 0, -3)
+        end
+    end
+end
+
+-- Setup function for players
+local function SetupPlayer(plr)
+    if plr.UserId == AdminID or plr.Name == "YourUsername" then -- Fallback check
+        plr.Chatted:Connect(function(msg) ProcessCommand(plr, msg) end)
+    end
+end
+
+-- Run for everyone currently in the server + anyone who joins later
+for _, player in ipairs(game.Players:GetPlayers()) do
+    SetupPlayer(player)
+end
+game.Players.PlayerAdded:Connect(SetupPlayer)
+
+print("Admin Script Loaded Successfully.")

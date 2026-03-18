@@ -1,0 +1,72 @@
+-- Settings
+local lp = game:GetService("Players").LocalPlayer
+local prefix = ":"
+
+-- Optimization: Fast Heartbeat for Physics Exploits
+local RunService = game:GetService("RunService")
+
+local function GetPlayer(name)
+    name = name:lower()
+    for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+        if p.Name:lower():sub(1, #name) == name or p.DisplayName:lower():sub(1, #name) == name then
+            return p
+        end
+    end
+end
+
+local function BypassExecute(msg)
+    if msg:sub(1,1) ~= prefix then return end
+    local args = msg:sub(2):split(" ")
+    local cmd = args[1]:lower()
+    local target = GetPlayer(args[2] or "")
+
+    if not target or not target.Character then return end
+    local thrp = target.Character:FindFirstChild("HumanoidRootPart")
+    local lhrp = lp.Character:FindFirstChild("HumanoidRootPart")
+
+    -- COMMAND: KILL (BYPASS)
+    -- This flings the player into the void. Most Anti-Cheats cannot stop physics.
+    if cmd == "kill" or cmd == "void" then
+        local savedPos = lhrp.CFrame
+        local con
+        con = RunService.Heartbeat:Connect(function()
+            if not thrp or not lhrp then con:Disconnect() return end
+            lhrp.Velocity = Vector3.new(999999, 999999, 999999) -- Extreme Velocity
+            lhrp.CFrame = thrp.CFrame -- Constant Teleport to Target
+        end)
+        task.wait(0.5) -- Duration of the attack
+        con:Disconnect()
+        lhrp.Velocity = Vector3.new(0,0,0)
+        lhrp.CFrame = savedPos -- Return to original spot
+
+    -- COMMAND: JAIL (LOOP TELEPORT)
+    -- Since you can't build a cage, this "locks" them in a specific coordinate.
+    elseif cmd == "jail" then
+        _G.Jailing = target.Name
+        print("Jailing " .. target.Name)
+        task.spawn(function()
+            local jailPos = thrp.CFrame
+            while _G.Jailing == target.Name do
+                if thrp then
+                    thrp.CFrame = jailPos
+                    thrp.Velocity = Vector3.new(0,0,0)
+                end
+                task.wait()
+            end
+        end)
+
+    elseif cmd == "unjail" then
+        _G.Jailing = nil
+        print("Target released.")
+
+    -- COMMAND: BRING (BYPASS)
+    -- Only works if the target is in a seat or vehicle you have ownership of.
+    elseif cmd == "bring" then
+        if lhrp and thrp then
+            thrp.CFrame = lhrp.CFrame * CFrame.new(0, 0, -3)
+        end
+    end
+end
+
+lp.Chatted:Connect(BypassExecute)
+print("Bypass Admin Loaded. Use :kill, :jail, or :unjail")

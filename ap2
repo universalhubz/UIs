@@ -1,12 +1,16 @@
 -- Settings
-local lp = game:GetService("Players").LocalPlayer
-local prefix = ":"
-
--- Optimization: Fast Heartbeat for Physics Exploits
+local Prefix = ":"
+local LocalPlayer = game:GetService("Players").LocalPlayer
 local RunService = game:GetService("RunService")
+local Mouse = LocalPlayer:GetMouse()
 
+local Flying = false
+local FlySpeed = 50
+local FrozenPlayers = {}
+
+-- Utility: Find Player
 local function GetPlayer(name)
-    name = name:lower()
+    name = (name or ""):lower()
     for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
         if p.Name:lower():sub(1, #name) == name or p.DisplayName:lower():sub(1, #name) == name then
             return p
@@ -14,59 +18,107 @@ local function GetPlayer(name)
     end
 end
 
-local function BypassExecute(msg)
-    if msg:sub(1,1) ~= prefix then return end
-    local args = msg:sub(2):split(" ")
-    local cmd = args[1]:lower()
-    local target = GetPlayer(args[2] or "")
-
-    if not target or not target.Character then return end
-    local thrp = target.Character:FindFirstChild("HumanoidRootPart")
-    local lhrp = lp.Character:FindFirstChild("HumanoidRootPart")
-
-    -- COMMAND: KILL (BYPASS)
-    -- This flings the player into the void. Most Anti-Cheats cannot stop physics.
-    if cmd == "kill" or cmd == "void" then
-        local savedPos = lhrp.CFrame
-        local con
-        con = RunService.Heartbeat:Connect(function()
-            if not thrp or not lhrp then con:Disconnect() return end
-            lhrp.Velocity = Vector3.new(999999, 999999, 999999) -- Extreme Velocity
-            lhrp.CFrame = thrp.CFrame -- Constant Teleport to Target
-        end)
-        task.wait(0.5) -- Duration of the attack
-        con:Disconnect()
-        lhrp.Velocity = Vector3.new(0,0,0)
-        lhrp.CFrame = savedPos -- Return to original spot
-
-    -- COMMAND: JAIL (LOOP TELEPORT)
-    -- Since you can't build a cage, this "locks" them in a specific coordinate.
-    elseif cmd == "jail" then
-        _G.Jailing = target.Name
-        print("Jailing " .. target.Name)
+-- Fly Logic
+local function ToggleFly(speed)
+    Flying = not Flying
+    FlySpeed = speed or 50
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    
+    if Flying and hrp and hum then
         task.spawn(function()
-            local jailPos = thrp.CFrame
-            while _G.Jailing == target.Name do
-                if thrp then
-                    thrp.CFrame = jailPos
-                    thrp.Velocity = Vector3.new(0,0,0)
-                end
-                task.wait()
+            local bv = Instance.new("BodyVelocity", hrp)
+            bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            while Flying and char.Parent do
+                local cam = workspace.CurrentCamera
+                bv.Velocity = (hum.MoveDirection.Magnitude > 0) and (cam.CFrame.LookVector * FlySpeed) or Vector3.new(0,0.1,0)
+                RunService.RenderStepped:Wait()
+            end
+            bv:Destroy()
+        end)
+    end
+end
+
+-- Command Execution
+local function ExecuteCommand(msg)
+    local args = msg:split(" ")
+    local cmd = args[1]:sub(#Prefix + 1):lower()
+    local target = GetPlayer(args[2])
+    
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+    -- 1. GOTO (Instant TP)
+    if cmd == "goto" and target and target.Character then
+        local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        if hrp and tHRP then hrp.CFrame = tHRP.CFrame * CFrame.new(0, 0, 3) end
+
+    -- 2. BRING (Bypass: Requires you to be near them to 'claim' physics)
+    elseif cmd == "bring" and target and target.Character then
+        local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        if hrp and tHRP then
+            tHRP.CFrame = hrp.CFrame * CFrame.new(0, 0, -3)
+        end
+
+    -- 3. FREEZE (Continuous CFrame Lock)
+    elseif cmd == "freeze" and target then
+        FrozenPlayers[target.UserId] = true
+        task.spawn(function()
+            local tHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+            while FrozenPlayers[target.UserId] and tHRP do
+                tHRP.CFrame = tHRP.CFrame
+                tHRP.Velocity = Vector3.new(0,0,0)
+                RunService.Heartbeat:Wait()
             end
         end)
 
-    elseif cmd == "unjail" then
-        _G.Jailing = nil
-        print("Target released.")
+    -- 4. UNFREEZE
+    elseif cmd == "unfreeze" and target then
+        FrozenPlayers[target.UserId] = nil
 
-    -- COMMAND: BRING (BYPASS)
-    -- Only works if the target is in a seat or vehicle you have ownership of.
-    elseif cmd == "bring" then
-        if lhrp and thrp then
-            thrp.CFrame = lhrp.CFrame * CFrame.new(0, 0, -3)
+    -- 5. JAIL (Creates a local part cage that follows them)
+    elseif cmd == "jail" and target and target.Character then
+        local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        if tHRP then
+            local cage = Instance.new("Part", workspace)
+            cage.Size = Vector3.new(10, 10, 10)
+            cage.Transparency = 0.5
+            cage.CanCollide = true
+            cage.Anchored = true
+            cage.CFrame = tHRP.CFrame
+            -- Keep the cage on them locally
+            task.spawn(function()
+                for i = 1, 100 do -- Jails for ~10 seconds
+                    cage.CFrame = tHRP.CFrame
+                    task.wait(0.1)
+                end
+                cage:Destroy()
+            end)
+        end
+
+    -- 6. FLY
+    elseif cmd == "fly" then
+        ToggleFly(tonumber(args[2]))
+
+    -- 7. FLING (The high-power physics exploit)
+    elseif cmd == "fling" and target and target.Character then
+        local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        if hrp and tHRP then
+            local oldCF = hrp.CFrame
+            local bv = Instance.new("BodyVelocity", hrp)
+            bv.Velocity = Vector3.new(9e5, 9e5, 9e5)
+            bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            local con = RunService.Heartbeat:Connect(function()
+                hrp.CFrame = tHRP.CFrame
+            end)
+            task.wait(0.5)
+            con:Disconnect()
+            bv:Destroy()
+            hrp.CFrame = oldCF
         end
     end
 end
 
-lp.Chatted:Connect(BypassExecute)
-print("Bypass Admin Loaded. Use :kill, :jail, or :unjail")
+LocalPlayer.Chatted:Connect(ExecuteCommand)
+print("--- Admin Loaded | Jail, Freeze, Bring, Goto, Fly, Fling ---")
